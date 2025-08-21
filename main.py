@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from agents.models.gemini_provider import GeminiProvider
 from agents import (
     Agent,
     function_tool,
@@ -16,6 +15,7 @@ from agents import (
     ModelSettings,
 )
 import asyncio
+import re
 import os
 from dotenv import load_dotenv
 
@@ -27,15 +27,12 @@ if not gemini_api_key:
 
 external_client = AsyncOpenAI(
     api_key=gemini_api_key,
-
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
 model = OpenAIChatCompletionsModel(
     model="gemini-2.0-flash",
     openai_client=external_client,
 )
-
-gemini_provider = GeminiProvider(api_key="YOUR_GEMINI_API_KEY")
 
 config = RunConfig(
     model=model,
@@ -47,24 +44,54 @@ class OrderStatusOutput(BaseModel):
     order_id: str
     status: str
 
-# Simulated DB
 ORDERS_DB = {
     "123": "Shipped",
     "456": "Processing",
     "789": "Delivered",
 }
 
-@function_tool
+def enable_order_status_tool(ctx: RunContextWrapper[str], agent: Agent[str]) -> bool:
+    """
+    Checks if the user's query contains the word "order" and a three-digit number.
+    Returns True if both are present, False otherwise.
+    """
+    user_input = ctx.context
+    has_order_word = re.search(r'\b(?:order)\b', user_input, re.IGNORECASE)
+    has_three_digits = re.search(r'\b\d{3}\b', user_input)
+    return bool(has_order_word and has_three_digits)
+
+@function_tool(
+    name_override="get_order_status",
+    description_override="Fetch a customer's order status by order_id from the simulated DB.",
+    is_enabled=enable_order_status_tool,
+    failure_error_function=lambda error, args: (
+        f"I couldn’t find that order. Please check your order ID and try again. ({error})"
+    ),
+)
+
 async def get_order_status(order_id: str) -> OrderStatusOutput:
     """Fetch order status from simulated DB."""
     if order_id not in ORDERS_DB:
-        raise ValueError("Order ID not found. Please check and try again.")
+        raise ValueError("Order ID not found")
     return OrderStatusOutput(order_id=order_id, status=ORDERS_DB[order_id])
 
 
-# -----------------------------
-# 2. GUARDRAIL AGENT
-# -----------------------------
+@function_tool
+async def get_company_info() -> str:
+    return '''\
+  Company Info:
+    Our company specializes in high-quality electronics, including laptops, smartphones, and accessories. All products meet industry standards and come with manufacturer warranties.
+
+  Support Info:
+   Our support team is available 24/7. You can return products within 30 days, track shipments, and request assistance with warranties or technical issues. Customer satisfaction is our top priority.
+
+    Terms & Policies:
+    Our terms and conditions ensure fair use of our services. We respect user privacy, provide transparent pricing, and adhere to all legal regulations. Please review policies before making a purchase.'''
+
+
+
+
+# This is all i mannaged to this by understandings docs at https://openai.github.io/openai-agents-python/guardrails/
 class SentimentCheckOutput(BaseModel):
     is_negative: bool
     reasoning: str
@@ -79,12 +106,16 @@ sentiment_guardrail_agent = Agent(
 async def sentiment_guardrail(
     ctx: RunContextWrapper[None], agent: Agent, input: str | list[TResponseInputItem]
 ) -> GuardrailFunctionOutput:
-    result = await Runner.run(sentiment_guardrail_agent, input, context=ctx.context)
+       result = await Runner.run(
+          sentiment_guardrail_agent,
+          input,
+          run_config=config
+        )
 
-    return GuardrailFunctionOutput(
+       return GuardrailFunctionOutput(
         output_info=result.final_output,
         tripwire_triggered=result.final_output.is_negative,
-    )
+       )
 
 
 human_agent = Agent(
@@ -92,57 +123,46 @@ human_agent = Agent(
     instructions="You are a human support agent. Handle complex or sensitive queries.",
 )
 
-
 bot_agent = Agent(
     name="Customer Support Bot",
     instructions="""
     You are a helpful customer support bot.
-    - Answer simple FAQs about products.
-    - Use get_order_status tool for order queries.
+    - Answer simple FAQs about products with get_company_info tool. 
+    - Use get_order_status tool for order queries with validation.
     - If input is complex, unclear, or escalated, hand off to Human Agent.
     """,
-    tools=[get_order_status],
+    tools=[get_company_info, get_order_status],
     input_guardrails=[sentiment_guardrail],
+    handoffs=[human_agent],  # <<< provide human agent here
     model_settings=ModelSettings(
-        tool_choice="auto",  
-        metadata={"team": "support-bot-v1"} #not suppoted becase of i dont have openai key
+        tool_choice="auto"
+        # metadata='sssss' can use it giving error
     ),
 )
 
 
 async def main():
-    queries = [
-        "What is your return policy?",
-        "Check order 123",
-        "Your company sucks, I want refund!",
-        "Can you reset my password and also fix billing?",
-        "Check order 000", 
-    ]
-
-    for q in queries:
-        print(f"\n🟢 USER: {q}")
-        try:
-            res = await Runner.run(bot_agent, q, run_config=config,)
-
-            # If bot decides it's too complex, handoff
-            if "reset my password" in q or "billing" in q:
-                print("🤝 Handoff to Human Agent...")
-                res = await handoff(human_agent, res)
-
-            # Log tool usage
-            if res.invocations:
-                for inv in res.invocations:
-                    print(f"   ⚙️ Tool used: {inv.tool} → {inv.output}")
-
+    user_input=str(input('Enter your query: '))
+    # for q in queries:
+        # print(f"\n🟢 USER: {q}")
+    try:
+            res = await Runner.run(
+                 bot_agent, 
+                 user_input, 
+                 run_config=config,
+                 context=user_input #<--- using this make use of is_enbled in function_tool
+                 )
             print(f"🤖 BOT: {res.final_output}")
+            print(f"🤖 BOT_Namey: {res.last_agent.name}")
 
-        except InputGuardrailTripwireTriggered as e:
+    except InputGuardrailTripwireTriggered as e:
             print("🚨 Guardrail tripped: Negative sentiment detected")
-            print("Reason:", e.output_info.reasoning)
+            print("Reason:", e)
             print("🤝 Escalating to Human Agent...")
-            res = await Runner.run(human_agent, q)
-            print(f"👩 HUMAN: {res.final_output}")
+            res = await Runner.run(human_agent, user_input,run_config=config)
+            print(f"👩 HUMAN: {res}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
