@@ -4,9 +4,8 @@ Assignment 6: Build a Smart Customer Support Bot using OpenAI Agent SDK, This pr
 
 The agent is designed to answer a set of predefined math questions such as:
 
-- "What is the weather in shangai?"
-- "What is two plus three?"
-- "what is the weather in islamabad and what is 4 + 4?"
+- "What is your policy?"
+- "check order status of order 123?"
 
 ---
 
@@ -21,7 +20,6 @@ The agent is designed to answer a set of predefined math questions such as:
 Create a .env file in your project directory:
 ```
 GEMINI_API_KEY=your_api_key_here
-WEATHER_API_KEY=your_api_key_here
 ```
 
 You can obtain your API key from Google AI Studio
@@ -35,25 +33,28 @@ You can obtain your API key from Google AI Studio
 
 Below is a test run of the chatbot
 
-What you want to know about weather info of a city OR addition of two numbers OR BOTH:
+(python-ai-agent) PS C:\programming\ai-assignments> & C:/programming/ai-assignments/.venv/Scripts/python.exe c:/programming/ai-assignments/assignment-6/main.py
+Enter your query: stupid ,idiot
+🚨 Guardrail tripped: Negative sentiment detected
+Reason: Guardrail InputGuardrail triggered tripwire
+🤝 Escalating to Human Agent...
+👩 HUMAN: RunResult:
+- Final output (str):
+    I understand that you're feeling frustrated and angry right now. I want to help if I can, but I can't respond to abusive language. Could you please tell me what's going on and what you need help with, using respectful language? I'll do my best to assist you.
+- 1 new item(s)
+- 0 input guardrail result(s)
+- 0 output guardrail result(s)
+(See `RunResult` for more details)
+(python-ai-agent) PS C:\programming\ai-assignments> & C:/programming/ai-assignments/.venv/Scripts/python.exe c:/programming/ai-assignments/assignment-6/main.py
+Enter your query: check order status of order 123
+🤖 BOT: Order 123 has shipped.
 
-Q1:What is the weather in shangai
+(python-ai-agent) PS C:\programming\ai-assignments> & C:/programming/ai-assignments/.venv/Scripts/python.exe c:/programming/ai-assignments/assignment-6/main.py
+Enter your query: what are your policy
+🤖 BOT: Our company specializes in high-quality electronics, including laptops, smartphones, and accessories. All products meet industry standards and come with manufacturer warranties. Our support team is available 24/7. You can return products within 30 days, track shipments, and request assistance with warranties or technical issues. Customer satisfaction is our top priority. 
+(python-ai-agent) PS C:\programming\ai-assignments> & C:/programming/ai-assignments/.venv/Scripts/python.exe c:/programming/ai-assignments/assignment-6/main.py
+Enter your query: what are your policy
+🤖 BOT: Our company specializes in high-quality electronics, including laptops, smartphones, and accessories. All products meet industry standards and come with manufacturer warranties. Our support team is available 24/7. You can return products within 30 days, track shipments, and request assistance with warranties or technical issues. Customer satisfaction is our top priority. 
+Our terms and conditions ensure fair use of our services. We respect user privacy, provide transparent pricing, and adhere to all legal regulations. Please review policies before making a purchase.
 
-get_weather tools hits <---
-You: what is the weather in shangai
-Agent: OK. The weather in Shangai, Zulia, Venezuela is last updated at 09:00 on 2025-08-21. It is Sunny with 9 clouds, 28.7°C (83.6°f), humidity: 71, wind_speed: 11.2.
-
-Q2:What is two plus three
-
-add tools hits <---
-You: what is two plus three
-Agent: The answer is 5.
-
-Q3:what is the weather in islamabad and what is 4 + 4
-
-get_weather tools hits <---
-add tools hits <---
-You: wha is the weather in islamabad and what is 4 + 4
-Agent: OK. The weather in Islamabad is 30.6°C, 87.0°f, Sunny Cloud:19, humidity:66, wind_speed:3.6. And 4 + 4 = 8.
-
-
+🤖 BOT_Name: Customer Support Bot
